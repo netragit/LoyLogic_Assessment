@@ -1,0 +1,21 @@
+pipeline {
+    agent any 
+    stages {    
+        stage('SCM') { 
+            steps {
+                   git branch: 'master', credentialsId: 'GitCred', url: 'https://github.com/netragit/spring-petclinic-assessment.git'
+            }
+        }
+        stage('Maven Build') {
+            steps {
+                sh "'mvnw'  ${workspace}/pom.xml package"
+                sh "java -jar target/*.jar"
+            }
+        }
+        stage('Ansible') { 
+            steps {
+                 sh  "sudo ansible-playbook ansible/playbook.yml -i ansible/inventories/hosts.ini"
+            }
+        }
+    }
+}

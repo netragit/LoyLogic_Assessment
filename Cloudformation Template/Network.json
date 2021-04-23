@@ -1,0 +1,321 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Description" : "AWS CFN to build network components of the environment.",
+  "Parameters" : {
+    "ClientName" : {
+      "Default" : "Loylogic",
+      "Description" : "Short & Single Word name of Client. To be used for tagging resources.",
+      "Type" : "String"
+    },
+    "EnvironmentName" : {
+      "Default" : "Dev",
+      "Description" : "Either Prod, Staging, Demo etc. To be used for tagging resorces.",
+      "Type" : "String",
+	  "AllowedValues" : [ "Dev","UAT" ]
+    },
+    "VPCCidrBlock" : {
+      "Default" : "172.20.0.0/16",
+      "Description" : "CIDR block of VPC being created",
+      "Type" : "String",
+      "AllowedPattern" : "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription" : "Must be a valid private CIDR range."
+    },
+    "PublicSubnetCidrBlockA" : {
+      "Default" : "172.20.10.0/24",
+      "Description" : "CIDR block of Public Subnet in AZ A",
+      "Type" : "String",
+      "AllowedPattern" : "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription" : "Must be a valid private CIDR range."
+    },
+    "AppSubnetCidrBlockA" : {
+      "Default" : "172.20.20.0/24",
+      "Description" : "CIDR block of App Subnet in AZ A",
+      "Type" : "String",
+      "AllowedPattern" : "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription" : "Must be a valid private CIDR range."
+    }
+  },
+  "Resources" : {
+    "VPC" : {
+      "Type" : "AWS::EC2::VPC",
+      "Properties" : {
+        "CidrBlock" : {
+          "Ref" : "VPCCidrBlock"
+        },
+        "EnableDnsSupport" : "true",
+        "EnableDnsHostnames" : "false",
+        "InstanceTenancy" : "default",
+        "Tags" : [ {
+          "Key" : "Name",
+          "Value" : {
+            "Fn::Join" : [ "-", [ {
+              "Ref" : "ClientName"
+            }, {
+              "Ref" : "EnvironmentName"
+            }, "VPC" ] ]
+          }
+        }, {
+          "Key" : "Environment",
+          "Value" : {
+            "Ref" : "EnvironmentName"
+          }
+        } ]
+      }
+    },
+    "PublicSubnetA" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "AvailabilityZone" : 
+		{
+          "Fn::Join" : [ "", [ {
+            "Ref" : "AWS::Region"
+          }, "a" ] ]
+        },
+        "CidrBlock" : {
+          "Ref" : "PublicSubnetCidrBlockA"
+        },
+        "MapPublicIpOnLaunch" : "true",
+        "Tags" : [ {
+          "Key" : "Name",
+          "Value" : {
+            "Fn::Join" : [ "-", [ {
+              "Ref" : "ClientName"
+            }, {
+              "Ref" : "EnvironmentName"
+            }, "PublicSubnet-a" ] ]
+          }
+        }, {
+          "Key" : "Environment",
+          "Value" : {
+            "Ref" : "EnvironmentName"
+          }
+        }],
+        "VpcId" : {
+          "Ref" : "VPC"
+        }
+      }
+    },
+    "AppSubnetA" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "AvailabilityZone" : {
+          "Fn::Join" : [ "", [ {
+            "Ref" : "AWS::Region"
+          }, "a" ] ]
+        },
+        "CidrBlock" : {
+          "Ref" : "AppSubnetCidrBlockA"
+        },
+        "MapPublicIpOnLaunch" : "false",
+        "Tags" : [ {
+          "Key" : "Name",
+          "Value" : {
+            "Fn::Join" : [ "-", [ {
+              "Ref" : "ClientName"
+            }, {
+              "Ref" : "EnvironmentName"
+            }, "AppSubnet-a" ] ]
+          }
+        }, {
+          "Key" : "Environment",
+          "Value" : {
+            "Ref" : "EnvironmentName"
+          }
+        } ],
+        "VpcId" : {
+          "Ref" : "VPC"
+        }
+      }
+    },
+    "IGW" : {
+      "Type" : "AWS::EC2::InternetGateway",
+      "Properties" : {
+        "Tags" : [ {
+          "Key" : "Name",
+          "Value" : {
+            "Fn::Join" : [ "-", [ {
+              "Ref" : "ClientName"
+            }, {
+              "Ref" : "EnvironmentName"
+            }, "IGW" ] ]
+          }
+        }, {
+          "Key" : "Environment",
+          "Value" : {
+            "Ref" : "EnvironmentName"
+          }
+        } ]
+      }
+    },
+    "VPCIGWAttachment" : {
+      "Type" : "AWS::EC2::VPCGatewayAttachment",
+      "Properties" : {
+        "InternetGatewayId" : {
+          "Ref" : "IGW"
+        },
+        "VpcId" : {
+          "Ref" : "VPC"
+        }
+      }
+    },
+    "PublicRouteTable" : {
+      "Type" : "AWS::EC2::RouteTable",
+      "Properties" : {
+        "VpcId" : {
+          "Ref" : "VPC"
+        },
+        "Tags" : [ {
+          "Key" : "Name",
+          "Value" : {
+            "Fn::Join" : [ "-", [ {
+              "Ref" : "ClientName"
+            }, {
+              "Ref" : "EnvironmentName"
+            }, "Public-RT" ] ]
+          }
+        }, {
+          "Key" : "Environment",
+          "Value" : {
+            "Ref" : "EnvironmentName"
+          }
+        } ]
+      }
+    },
+    "PublicRTEntry" : {
+      "Type" : "AWS::EC2::Route",
+      "Properties" : {
+        "DestinationCidrBlock" : "0.0.0.0/0",
+        "GatewayId" : {
+          "Ref" : "IGW"
+        },
+        "RouteTableId" : {
+          "Ref" : "PublicRouteTable"
+        }
+      }
+    },
+    "PublicRTSubnetAssociationA" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "RouteTableId" : {
+          "Ref" : "PublicRouteTable"
+        },
+        "SubnetId" : {
+          "Ref" : "PublicSubnetA"
+        }
+      }
+    },
+	"EIP": {
+		"Type": "AWS::EC2::EIP",
+		"Properties": {
+			"Domain": "VPC"
+		}
+	},
+    "NATGW" : {
+      "Type" : "AWS::EC2::NatGateway",
+      "Properties" : {
+        "AllocationId" : {
+          "Fn::GetAtt" : [ "EIP", "AllocationId" ]
+        },
+        "SubnetId" : {
+          "Ref" : "PublicSubnetA"
+        },
+        "Tags" : [ {
+          "Key" : "Name",
+          "Value" : {
+            "Fn::Join" : [ "-", [ {
+              "Ref" : "ClientName"
+            }, {
+              "Ref" : "EnvironmentName"
+            }, "NAT" ] ]
+          }
+        }, {
+          "Key" : "Environment",
+          "Value" : {
+            "Ref" : "EnvironmentName"
+          }
+        } ]
+      }
+    },
+    "PrivateRouteTable" : {
+      "Type" : "AWS::EC2::RouteTable",
+      "Properties" : {
+        "VpcId" : {
+          "Ref" : "VPC"
+        },
+        "Tags" : [ {
+          "Key" : "Name",
+          "Value" : {
+            "Fn::Join" : [ "-", [ {
+              "Ref" : "ClientName"
+            }, {
+              "Ref" : "EnvironmentName"
+            }, "Private-RT" ] ]
+          }
+        }, {
+          "Key" : "Environment",
+          "Value" : {
+            "Ref" : "EnvironmentName"
+          }
+        }]
+      }
+    },
+    "PrivateRTEntry" : {
+      "Type" : "AWS::EC2::Route",
+      "Properties" : {
+        "DestinationCidrBlock" : "0.0.0.0/0",
+        "NatGatewayId" : {
+          "Ref" : "NATGW"
+        },
+        "RouteTableId" : {
+          "Ref" : "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateRTSubnetAssociationAppA" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "RouteTableId" : {
+          "Ref" : "PrivateRouteTable"
+        },
+        "SubnetId" : {
+          "Ref" : "AppSubnetA"
+        }
+      }
+    }
+  },
+  "Outputs" : {
+    "VPCIDOP" : {
+      "Description" : "VPC ID being created",
+      "Value" : {
+        "Ref" : "VPC"
+      },
+      "Export" : {
+        "Name" : {
+          "Fn::Sub" : "${AWS::StackName}-VpcId"
+        }
+      }
+    },
+    "PublicSubnetAOP" : {
+      "Description" : "Subnet ID of Public Subnet A",
+      "Value" : {
+        "Ref" : "PublicSubnetA"
+      },
+      "Export" : {
+        "Name" : {
+          "Fn::Sub" : "${AWS::StackName}-public-SubnetID"
+        }
+      }
+    },
+    "AppSubnetAOP" : {
+      "Description" : "Subnet ID of App Subnet 1A",
+      "Value" : {
+        "Ref" : "AppSubnetA"
+      },
+      "Export" : {
+        "Name" : {
+          "Fn::Sub" : "${AWS::StackName}-private-SubnetID"
+        }
+      }
+    }
+    }
+  }

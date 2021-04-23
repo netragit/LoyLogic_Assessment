@@ -1,0 +1,209 @@
+{
+	"Description": "Create an EC2 instance by AWS CloudFormation",
+	"Parameters": {
+		"EC2Public": {
+			"Type": "String",
+			"Default": "CFNServer",
+			"Description": "Enter the name of EC2"
+		},
+		"InstanceTypeParameterPublic": {
+			"Type": "String",
+			"Default": "t2.micro",
+			"AllowedValues": ["t2.micro", "m1.small", "m1.large"],
+			"Description": "Enter t2.micro, m1.small, or m1.large. Default is t2.micro."
+		},
+		"ImageIdPublic": {
+			"Description": "Please enter Image Id you want to use",
+			"Type": "String",
+			"Default": "ami-03ca998611da0fe12"
+		},
+		"EC2Private": {
+			"Type": "String",
+			"Default": "TargetServer",
+			"Description": "Enter the name of EC2"
+		},
+		"InstanceTypeParameterPrivate": {
+			"Type": "String",
+			"Default": "t2.micro",
+			"AllowedValues": ["t2.micro", "m1.small", "m1.large"],
+			"Description": "Enter t2.micro, m1.small, or m1.large. Default is t2.micro."
+		},
+		"ImageIdPrivate": {
+			"Description": "Please enter Image Id you want to use",
+			"Type": "String",
+			"Default": "ami-03ca998611da0fe12"
+		},
+		"AvailabilityZonePublic": {
+			"Description": "Please enter the AZ you want to put your Jenkins Server in",
+			"Type": "String",
+			"Default": "ap-southeast-1a"
+		},
+		"AvailabilityZonePrivate": {
+			"Description": "Please enter the AZ you want to put your Target Server in",
+			"Type": "String",
+			"Default": "ap-southeast-1b"
+		},
+		"StackName": {
+			"Description": "Please enter the Network Stack Name",
+			"Type": "String",
+			"Default": "NetworkingStack"
+		}
+	},
+	"Resources": {
+		"SecurityGroupJenkinsServer": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupName": "sgJenkins",
+				"SecurityGroupIngress": [{
+						"IpProtocol": "tcp",
+						"FromPort": 22,
+						"ToPort": 22,
+						"CidrIp": "0.0.0.0/0",
+						"Description": "For traffic from Internet"
+					},
+					{
+						"IpProtocol": "tcp",
+						"FromPort": 8080,
+						"ToPort": 8080,
+						"CidrIp": "0.0.0.0/0",
+						"Description": "For traffic from Internet"
+					}
+				],
+				"GroupDescription": "Security Group for Jenkins server",
+				"VpcId": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${StackName}-VpcId"
+					}
+				}
+			}
+		},
+		"JenkinsServer": {
+			"Type": "AWS::EC2::Instance",
+			"Properties": {
+				"AvailabilityZone": {
+					"Ref": "AvailabilityZonePublic"
+				},
+				"BlockDeviceMappings": [{
+					"DeviceName": "/dev/sdm",
+					"Ebs": {
+						"DeleteOnTermination": "true",
+						"VolumeSize": "8",
+						"VolumeType": "gp2"
+					}
+				}],
+				"ImageId": {
+					"Ref": "ImageIdPublic"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "JenkinsServer"
+				}],
+				"InstanceType": {
+					"Ref": "InstanceTypeParameterPublic"
+				},
+				"UserData": {
+					"Fn::Base64": {
+						"Fn::Join": [
+							"",
+							[
+								"#!/bin/bash -xe\n",
+								"# Updating to Java 8\n",
+								"yum install -y java-1.8.0-openjdk.x86_64 || true \n",
+								"sudo /usr/sbin/alternatives --set java /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/java || true\n",
+								"sudo /usr/sbin/alternatives --set javac /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/javac || true \n",
+								"yum remove java-1.7 || true \n",
+
+								"sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo\n",
+								"sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io.key\n",
+								"yum install -y jenkins\n",
+								"sudo mkdir -p /var/lib/jenkins\n",
+								"sudo amazon-linux-extras install ansible2 -y \n"
+
+							]
+						]
+					}
+				},
+				"KeyName": "public",
+				"NetworkInterfaces": [{
+					"Description": "Primary network interface",
+					"DeviceIndex": "0",
+					"SubnetId": {
+						"Fn::ImportValue": {
+							"Fn::Sub": "${StackName}-public-SubnetID"
+
+						}
+					},
+					"AssociatePublicIpAddress": "True",
+					"GroupSet": [{
+						"Ref": "SecurityGroupJenkinsServer"
+					}]
+				}]
+			}
+		},
+		"SecurityGroupTargetServer": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupName": "sgTarget",
+				"SecurityGroupIngress": [{
+					"IpProtocol": "tcp",
+					"FromPort": 22,
+					"ToPort": 22,
+					"SourceSecurityGroupId": {
+						"Ref": "SecurityGroupJenkinsServer"
+					},
+					"Description": "For traffic from Internet"
+				}],
+				"GroupDescription": "Security Group for Target server",
+				"VpcId": {
+					"Fn::ImportValue": {
+						"Fn::Sub": "${StackName}-VpcId"
+
+					}
+				}
+			}
+		},
+
+		"TargetServer": {
+			"Type": "AWS::EC2::Instance",
+			"Properties": {
+				"AvailabilityZone": {
+					"Ref": "AvailabilityZonePrivate"
+				},
+				"BlockDeviceMappings": [{
+					"DeviceName": "/dev/sdm",
+					"Ebs": {
+						"DeleteOnTermination": "true",
+						"VolumeSize": "8",
+						"VolumeType": "gp2"
+					}
+				}],
+				"ImageId": {
+					"Ref": "ImageIdPrivate"
+				},
+				"Tags": [{
+					"Key": "Name",
+					"Value": "TargetServer"
+				}],
+				"InstanceType": {
+					"Ref": "InstanceTypeParameterPrivate"
+				},
+
+				"KeyName": "public",
+				"NetworkInterfaces": [{
+					"Description": "Primary network interface",
+					"DeviceIndex": "0",
+					"SubnetId": {
+						"Fn::ImportValue": {
+							"Fn::Sub": "${StackName}-private-SubnetID"
+
+						}
+					},
+
+					"GroupSet": [{
+						"Ref": "SecurityGroupTargetServer"
+					}]
+				}]
+			}
+		}
+	}
+}

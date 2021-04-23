@@ -1,0 +1,10 @@
+---
+- hosts: test
+  tasks:
+    - name: copy java files from jenkins to target server
+      copy:
+        src: "/home/ec2-user/testing/"
+        dest: "/home/ec2-user/testing/"
+        owner: ec2-user
+        group: ec2-user
+        mode: u=rw,g=r,o=r

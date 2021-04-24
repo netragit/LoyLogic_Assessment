@@ -9,7 +9,6 @@ pipeline {
         stage('Maven Build') {
             steps {
                 sh "'mvnw'  ${workspace}/pom.xml package"
-                sh "java -jar target/*.jar"
             }
         }
         stage('Ansible') { 
